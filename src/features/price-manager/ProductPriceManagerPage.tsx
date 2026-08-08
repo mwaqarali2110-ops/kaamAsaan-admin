@@ -5,9 +5,10 @@ import { FiEdit2, FiEye, FiEyeOff, FiSearch, FiUploadCloud } from "react-icons/f
 import { EmptyState, ErrorState, LoadingState } from "../../components/AsyncState";
 import { Modal } from "../../components/Modal";
 import { PageHeader } from "../../components/PageHeader";
+import { brandMatches, displayBrandName, normalizeBrandName } from "../../lib/brand";
 import { errorMessage, formatMoney } from "../../lib/utils";
 import { supabase } from "../../lib/supabase";
-import type { Brand, PriceUnit, Product, ProductCategory, ProductSubCategory, StockStatus } from "../../types/database";
+import type { PriceUnit, Product, ProductCategory, ProductSubCategory, StockStatus } from "../../types/database";
 import { parseMarketRateText, type ParsedMarketRate } from "./marketRateParser";
 
 type DraftRow = {
@@ -32,11 +33,8 @@ const stockOptions: Array<{ value: StockStatus; label: string }> = [
 
 const categoryOptions: Array<{ value: string; label: string; category: ProductCategory; subCategory?: ProductSubCategory }> = [
   { value: "solar_panels", label: "Solar Panels", category: "solar_panel" },
-  { value: "hybrid_inverters", label: "Hybrid Inverters", category: "inverter", subCategory: "hybrid_inverter" },
-  { value: "on_grid_inverters", label: "On-Grid Inverters", category: "inverter", subCategory: "on_grid_inverter" },
-  { value: "lithium_batteries", label: "Lithium Batteries", category: "battery", subCategory: "lithium_battery" },
-  { value: "accessories", label: "Accessories", category: "accessory" },
-  { value: "combo_deals", label: "Combo Deals / ESS", category: "accessory", subCategory: "combo_deal" },
+  { value: "inverters", label: "Inverters", category: "inverter" },
+  { value: "batteries", label: "Batteries", category: "battery" },
 ];
 
 async function fetchProducts() {
@@ -46,12 +44,6 @@ async function fetchProducts() {
     .order("updated_at", { ascending: false });
   if (error) throw error;
   return data as Product[];
-}
-
-async function fetchBrands() {
-  const { data, error } = await supabase.from("brands").select("*").order("name");
-  if (error) throw error;
-  return data as Brand[];
 }
 
 function normalizeStatus(status: StockStatus): StockStatus {
@@ -83,7 +75,6 @@ function inferSubCategory(product: Product): ProductSubCategory {
   if (product.category === "inverter") return "hybrid_inverter";
   if (lower.includes("combo")) return "combo_deal";
   if (lower.includes("ess")) return "ess";
-  if (product.category === "accessory") return "accessory";
   return null;
 }
 
@@ -163,10 +154,9 @@ function buildPayload(product: Product, row: DraftRow) {
 }
 
 function matchParsedProduct(parsed: ParsedMarketRate, products: Product[]) {
-  const parsedBrand = parsed.brand.toLowerCase();
   const parsedName = parsed.productName.toLowerCase();
   return products.find((product) => {
-    const brandMatch = product.brands?.name?.toLowerCase().includes(parsedBrand) || parsedBrand.includes(product.brands?.name?.toLowerCase() ?? "");
+    const brandMatch = brandMatches(product.brands?.name, parsed.brand);
     const productText = `${product.name} ${product.model ?? ""}`.toLowerCase();
     const capacityMatch = parsed.capacityValue == null || Number(capacityValue(product)) === parsed.capacityValue;
     return Boolean(brandMatch && capacityMatch && (productText.includes(parsedName.slice(0, 12)) || parsedName.includes(product.name.toLowerCase().slice(0, 12))));
@@ -176,7 +166,6 @@ function matchParsedProduct(parsed: ParsedMarketRate, products: Product[]) {
 export function ProductPriceManagerPage() {
   const queryClient = useQueryClient();
   const products = useQuery({ queryKey: ["products", "price-manager"], queryFn: fetchProducts });
-  const brands = useQuery({ queryKey: ["brands"], queryFn: fetchBrands });
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [brand, setBrand] = useState("all");
@@ -192,12 +181,26 @@ export function ProductPriceManagerPage() {
   const [importText, setImportText] = useState("");
 
   const allProducts = products.data ?? [];
+  const brandOptions = useMemo(() => {
+    const selectedCategory = categoryOptions.find((item) => item.value === category)?.category;
+    const options = new Map<string, string>();
+    allProducts
+      .filter((product) => !selectedCategory || product.category === selectedCategory)
+      .forEach((product) => {
+        const label = displayBrandName(product.brands?.name);
+        const value = normalizeBrandName(label);
+        if (value) options.set(value, label);
+      });
+    return [...options.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [allProducts, category]);
   const filtered = useMemo(() => allProducts.filter((product) => {
     const option = categoryOptions.find((item) => item.value === category);
     const productSub = inferSubCategory(product);
     const haystack = `${product.name} ${product.model ?? ""} ${product.brands?.name ?? ""}`.toLowerCase();
     return (category === "all" || (option && product.category === option.category && (!option.subCategory || productSub === option.subCategory || (option.value === "combo_deals" && productSub === "ess")))) &&
-      (brand === "all" || product.brand_id === brand) &&
+      (brand === "all" || normalizeBrandName(displayBrandName(product.brands?.name)) === brand) &&
       (status === "all" || normalizeStatus(product.stock_status) === status) &&
       haystack.includes(search.toLowerCase());
   }), [allProducts, brand, category, search, status]);
@@ -299,8 +302,8 @@ export function ProductPriceManagerPage() {
       <section className="panel mb-4 p-3">
         <div className="grid gap-3 lg:grid-cols-[1.3fr_0.8fr_0.8fr_0.8fr_auto]">
           <label className="relative"><FiSearch className="absolute left-3 top-3 text-slate-400" /><input className="field pl-9" placeholder="Search product, model, or brand" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
-          <select className="field" value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">All categories</option>{categoryOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
-          <select className="field" value={brand} onChange={(event) => setBrand(event.target.value)}><option value="all">All brands</option>{brands.data?.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+          <select className="field" value={category} onChange={(event) => { setCategory(event.target.value); setBrand("all"); }}><option value="all">All categories</option>{categoryOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
+          <select className="field" value={brand} onChange={(event) => setBrand(event.target.value)}><option value="all">All brands</option>{brandOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
           <select className="field" value={status} onChange={(event) => setStatus(event.target.value as typeof status)}><option value="all">All stock statuses</option>{stockOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
           <button className="btn-secondary whitespace-nowrap" onClick={() => setSelected(new Set(filtered.map((item) => item.id)))}>Select filtered</button>
         </div>
@@ -348,7 +351,7 @@ export function ProductPriceManagerPage() {
                     <tr key={product.id} className={`${changed ? "bg-amber-50/70" : "hover:bg-slate-50/70"}`}>
                       <td className="px-3 py-3"><input type="checkbox" checked={selected.has(product.id)} onChange={() => toggleSelected(product.id)} /></td>
                       <td className="px-3 py-3"><div className="font-bold text-ink">{product.name}</div><div className="text-xs text-slate-500">{product.model || product.sku || "No model"}</div></td>
-                      <td className="px-3 py-3 font-semibold">{product.brands?.name ?? "Unknown"}</td>
+                      <td className="px-3 py-3 font-semibold">{displayBrandName(product.brands?.name)}</td>
                       <td className="px-3 py-3"><div className="capitalize">{product.category.replace(/_/g, " ")}</div><div className="text-xs text-slate-500">{inferSubCategory(product)?.replace(/_/g, " ") || "-"}</div></td>
                       <td className="px-3 py-3 font-semibold">{capacityLabel(product)}</td>
                       <td className="px-3 py-3">
