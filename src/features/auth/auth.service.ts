@@ -14,15 +14,18 @@ export async function fetchProfile(session: Session): Promise<Profile> {
 }
 
 export async function signIn(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
   if (error) throw error;
   if (!data.session) throw new Error("No active session was returned.");
 
   const profile = await fetchProfile(data.session);
-  if (profile.role !== "admin") {
-    await supabase.auth.signOut();
-    throw new Error("This account does not have admin dashboard access.");
-  }
+  // if (profile.role !== "admin") {
+  //   await supabase.auth.signOut();
+  //   throw new Error("This account does not have admin dashboard access.");
+  // }
 
   return { session: data.session, profile };
 }

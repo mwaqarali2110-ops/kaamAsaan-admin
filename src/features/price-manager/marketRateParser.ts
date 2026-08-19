@@ -1,10 +1,11 @@
-import type { PriceUnit, ProductCategory, ProductSubCategory, StockStatus } from "../../types/database";
+import type { BrandCategory, PriceUnit, ProductSubCategory, StockStatus } from "../../types/database";
+import { displayBrandName } from "../../lib/brand";
 
 export type ParsedMarketRate = {
   id: string;
   brand: string;
   productName: string;
-  category: ProductCategory;
+  category: BrandCategory;
   subCategory: ProductSubCategory;
   capacityValue: number | null;
   capacityUnit: string | null;
@@ -33,6 +34,7 @@ const brandHints = [
   "dyness",
   "tesla",
   "itel",
+  "kstar",
   "fronus",
   "sungrow",
   "deye",
@@ -89,11 +91,11 @@ function parseStatus(line: string): { stockStatus: StockStatus; etaNote: string 
 function parseBrand(line: string) {
   const lower = line.toLowerCase();
   const hint = brandHints.find((item) => lower.includes(item));
-  if (hint) return hint === "ja" ? "JA" : hint === "foxess" ? "FOX ESS" : titleCase(hint);
+  if (hint) return displayBrandName(hint === "foxess" ? "fox" : hint);
   return titleCase(line.split(/\s+/).slice(0, 2).join(" "));
 }
 
-function inferCategory(line: string, capacityUnit: string | null): { category: ProductCategory; subCategory: ProductSubCategory } {
+function inferCategory(line: string, capacityUnit: string | null): { category: BrandCategory; subCategory: ProductSubCategory } {
   const lower = line.toLowerCase();
   if (capacityUnit === "W" || lower.includes("panel") || lower.includes("module")) return { category: "solar_panel", subCategory: null };
   if (capacityUnit === "kWh" || lower.includes("battery") || lower.includes("lithium")) return { category: "battery", subCategory: "lithium_battery" };

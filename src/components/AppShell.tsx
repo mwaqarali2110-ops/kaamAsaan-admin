@@ -1,16 +1,22 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   FiActivity,
+  FiBatteryCharging,
   FiBox,
   FiGrid,
   FiLayers,
-  FiLink,
   FiLogOut,
   FiMenu,
   FiDollarSign,
   FiShoppingBag,
+  FiZap,
   FiUsers,
   FiX,
+  FiShield,
+  FiSliders,
+  FiPercent,
+  FiTruck,
+  FiSettings,
 } from "react-icons/fi";
 import { useState } from "react";
 import { signOut } from "../features/auth/auth.service";
@@ -19,12 +25,19 @@ import { useAuthStore } from "../store/useAuthStore";
 const links = [
   { to: "/", label: "Overview", icon: FiGrid },
   { to: "/products", label: "Products", icon: FiShoppingBag },
+  { to: "/accessories", label: "Accessories", icon: FiBox },
+  { to: "/ev-chargers", label: "EV Chargers", icon: FiBatteryCharging },
   { to: "/admin/products/price-manager", label: "Price Manager", icon: FiDollarSign },
   { to: "/brands", label: "Brands", icon: FiLayers },
+  { to: "/package-configuration", label: "Package Management", icon: FiZap },
+  { to: "/recommendation-rules", label: "Recommendation Rules", icon: FiSliders },
+  { to: "/promo-codes", label: "Promo Codes", icon: FiPercent },
   { to: "/users", label: "Users", icon: FiUsers },
   { to: "/bookings", label: "Survey Bookings", icon: FiBox },
+  { to: "/orders", label: "Product Orders", icon: FiTruck },
+  { to: "/service-pricing", label: "Service Pricing", icon: FiSettings },
+  { to: "/premium-care", label: "Premium Care", icon: FiShield },
   { to: "/smart-tools", label: "Smart Tools", icon: FiActivity },
-  { to: "/compatibility", label: "Compatibility", icon: FiLink },
 ];
 
 export function AppShell() {
